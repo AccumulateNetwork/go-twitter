@@ -45,9 +45,9 @@ const (
 
 // Client is used to make twitter v2 API callouts.
 //
-// Authorizer is used to add auth to the request
+// # Authorizer is used to add auth to the request
 //
-// Client is the HTTP client to use for all requests
+// # Client is the HTTP client to use for all requests
 //
 // Host is the base URL to use like, https://api.twitter.com
 type Client struct {
@@ -4275,4 +4275,118 @@ func (c *Client) RemoveTweetBookmark(ctx context.Context, userID, tweetID string
 	respBody.RateLimit = rl
 
 	return respBody, nil
+}
+
+// InitiateGroupDMConversation returns all list a user is a member of
+func (c *Client) InitiateGroupDMConversation(ctx context.Context, group *GroupDM) (*GroupDMResponse, error) {
+	if group == nil {
+		return nil, fmt.Errorf("must provide a Group DM configuration")
+	}
+
+	err := group.Validate()
+	if err != nil {
+		return nil, err
+	}
+	enc, err := json.Marshal(group)
+	if err != nil {
+		return nil, fmt.Errorf("tweet hide replies: request body marshal %w", err)
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, dmConversationsEndpoint.url(c.Host), bytes.NewReader(enc))
+	if err != nil {
+		return nil, fmt.Errorf("dm conversation request: %w", err)
+	}
+	req.Header.Add("Accept", "application/json")
+	req.Header.Add("Content-Type", "application/json")
+	c.Authorizer.Add(req)
+
+	resp, err := c.Client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("tweet hide replies response: %w", err)
+	}
+	defer resp.Body.Close()
+
+	rl := rateFromHeader(resp.Header)
+
+	decoder := json.NewDecoder(resp.Body)
+
+	if resp.StatusCode != http.StatusOK {
+		errResp := &ErrorResponse{}
+		if err := decoder.Decode(errResp); err != nil {
+			return nil, &HTTPError{
+				Status:     resp.Status,
+				StatusCode: resp.StatusCode,
+				URL:        resp.Request.URL.String(),
+				RateLimit:  rl,
+			}
+		}
+		errResp.StatusCode = resp.StatusCode
+		errResp.RateLimit = rl
+		return nil, errResp
+	}
+
+	dm := &GroupDMResponse{}
+	if err := decoder.Decode(dm); err != nil {
+		return nil, &ResponseDecodeError{
+			Name:      "group dm response",
+			Err:       err,
+			RateLimit: rl,
+		}
+	}
+	return dm, nil
+}
+
+func (c *Client) addDMConversation(ctx context.Context, conversationId string, message *Message) (*GroupDMResponse, error) {
+	if message == nil {
+		return nil, fmt.Errorf("message not provided")
+	}
+	err := message.Validate()
+	if err != nil {
+		return nil, err
+	}
+	enc, err := json.Marshal(message.Text)
+	if err != nil {
+		return nil, fmt.Errorf("tweet hide replies: request body marshal %w", err)
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, dmConversationsEndpoint.urlID(c.Host, conversationId)+"/messages", bytes.NewReader(enc))
+	if err != nil {
+		return nil, fmt.Errorf("dm conversation request: %w", err)
+	}
+	req.Header.Add("Accept", "application/json")
+	req.Header.Add("Content-Type", "application/json")
+	c.Authorizer.Add(req)
+
+	resp, err := c.Client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("tweet hide replies response: %w", err)
+	}
+	defer resp.Body.Close()
+
+	rl := rateFromHeader(resp.Header)
+
+	decoder := json.NewDecoder(resp.Body)
+
+	if resp.StatusCode != http.StatusOK {
+		errResp := &ErrorResponse{}
+		if err := decoder.Decode(errResp); err != nil {
+			return nil, &HTTPError{
+				Status:     resp.Status,
+				StatusCode: resp.StatusCode,
+				URL:        resp.Request.URL.String(),
+				RateLimit:  rl,
+			}
+		}
+		errResp.StatusCode = resp.StatusCode
+		errResp.RateLimit = rl
+		return nil, errResp
+	}
+
+	dm := &GroupDMResponse{}
+	if err := decoder.Decode(dm); err != nil {
+		return nil, &ResponseDecodeError{
+			Name:      "group dm response",
+			Err:       err,
+			RateLimit: rl,
+		}
+	}
+	return dm, nil
 }

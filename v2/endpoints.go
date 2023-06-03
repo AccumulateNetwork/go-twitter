@@ -53,6 +53,7 @@ const (
 	complianceJobsEndpoint                        endpoint = "2/compliance/jobs"
 	quoteTweetLookupEndpoint                      endpoint = "2/tweets/{id}/quote_tweets"
 	tweetBookmarksEndpoint                        endpoint = "2/users/{id}/bookmarks"
+	dmConversationsEndpoint                       endpoint = "2/dm_conversations"
 
 	idTag = "{id}"
 )
